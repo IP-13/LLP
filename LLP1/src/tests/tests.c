@@ -2,6 +2,8 @@
 
 #include "tests.h"
 
+#define INT_RANGE 1000000
+#define FLOAT_RANGE 1000
 
 struct table *create_test_table1() {
     struct column_list *column_list1 = create_column_list();
@@ -175,13 +177,13 @@ struct tuple *create_random_tuple(uint64_t num_of_attributes, const enum data_ty
             }
             case INT: {
                 struct int_field *int_field = my_malloc(sizeof(struct int_field));
-                int_field->data = rand() % 100000;
+                int_field->data = rand() % INT_RANGE;
                 data[i] = int_field;
                 break;
             }
             case FLOAT : {
                 struct float_field *float_field = my_malloc(sizeof(struct float_field));
-                float_field->data = (rand() % 100) / 200;
+                float_field->data = (float) rand() / (float) (RAND_MAX / FLOAT_RANGE);;
                 data[i] = float_field;
                 break;
             }

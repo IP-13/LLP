@@ -7,28 +7,36 @@ struct tuple *read_tuple(uint64_t num_of_attributes, const enum data_type *table
     page_offset start;
     fread(&start, sizeof(page_offset), 1, file);
 
-    void **data = (void **) my_malloc(sizeof(void *));
+    void **data = (void **) my_malloc(num_of_attributes * sizeof(void *));
 
     for (size_t i = 0; i < num_of_attributes; i++) {
         switch (table_scheme[i]) {
-            case BOOL:
-                data[i] = my_malloc(sizeof(struct bool_field));
-                fread(data[i], sizeof(int32_t), 1, file);
+            case BOOL: {
+                struct bool_field *bool_field = my_malloc(sizeof(struct bool_field));
+                fread(&bool_field->data, sizeof(int32_t), 1, file);
+                data[i] = bool_field;
                 break;
-            case INT:
-                data[i] = my_malloc(sizeof(struct int_field));
-                fread(data[i], sizeof(int32_t), 1, file);
+            }
+            case INT: {
+                struct int_field *int_field = my_malloc(sizeof(struct int_field));
+                fread(&int_field->data, sizeof(int32_t), 1, file);
+                data[i] = int_field;
                 break;
-            case FLOAT:
-                data[i] = my_malloc(sizeof(struct float_field));
-                fread(data[i], sizeof(float), 1, file);
+            }
+            case FLOAT: {
+                struct float_field *float_field = my_malloc(sizeof(struct float_field));
+                fread(&float_field->data, sizeof(float), 1, file);
+                data[i] = float_field;
                 break;
-            case STRING:
-                data[i] = my_malloc(sizeof(struct string_field));
-                fread(&((struct string_field *) data[i])->size, sizeof(uint16_t), 1, file);
-                ((struct string_field *) data[i])->data = my_malloc(((struct string_field *) data[i])->size);
-                fread(((struct string_field *) data[i])->data, ((struct string_field *) data[i])->size, 1, file);
+            }
+            case STRING: {
+                struct string_field *string_field = my_malloc(sizeof(struct string_field));
+                fread(&string_field->size, sizeof(uint16_t), 1, file);
+                string_field->data = my_malloc(string_field->size * sizeof(char));
+                fread(string_field->data, string_field->size, 1, file);
+                data[i] = string_field;
                 break;
+            }
             default:
                 return NULL;
         }
@@ -97,6 +105,7 @@ void free_tuple(struct tuple *tuple, const enum data_type *table_scheme, uint64_
         }
     }
 
+    my_free(tuple->data, num_of_attributes * sizeof(void *));
     my_free(tuple, sizeof(struct tuple));
 }
 

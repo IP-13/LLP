@@ -161,6 +161,7 @@ void close_db(struct db *db) {
     fwrite(&(db->last_page_offset.offset), sizeof(db->last_page_offset.offset), 1, file);
     fwrite(&(db->num_of_tables), sizeof(db->num_of_tables), 1, file);
     my_free(db->name, TABLE_NAME_SIZE * sizeof(char));
+    my_free(db, sizeof(struct db));
     fclose(file);
 }
 
@@ -466,7 +467,7 @@ void join_table(struct db *db, char *table1_name, char *table2_name, uint16_t nu
     struct page_select *page_select1 = select_from_page(curr_page1, num_of_filters1, filters1);
 
 
-    // select
+
     struct page *curr_page2 = table2->last_page;
 
     while (curr_page2->prev_page.offset != NULL_PAGE) {
@@ -500,7 +501,7 @@ void join_table(struct db *db, char *table1_name, char *table2_name, uint16_t nu
     if (curr_page2 != table2->last_page) {
         free_page(curr_page2, table2->table_scheme, table2->num_of_columns);
     }
-    // select
+
 
 
     if (curr_page1 != table1->last_page) {
