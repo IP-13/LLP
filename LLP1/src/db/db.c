@@ -2,7 +2,7 @@
 
 #include "db.h"
 #include "table.h"
-
+#include "is_test.h"
 
 struct db *create_db(char *filename) {
     FILE *file = fopen(filename, "w+");
@@ -291,11 +291,12 @@ void print_tuple(struct tuple *tuple, uint32_t num_of_attributes, const enum dat
 
 
 void handle_page_select(struct page_select *page_select, enum data_type *table_scheme, uint64_t num_of_attributes) {
+#ifndef TEST
     for (size_t i = 0; i < page_select->num_of_tuples; i++) {
         print_tuple(page_select->tuples[i], num_of_attributes, table_scheme);
         printf("\n");
     }
-
+#endif
     my_free(page_select->tuples, MAX_NUM_OF_TUPLES * sizeof(struct tuple *));
     my_free(page_select, sizeof(struct page_select));
 }
@@ -319,10 +320,13 @@ void select_from_table(struct db *db, char *table_name, uint16_t num_of_filter, 
     while (curr_page->prev_page.offset != NULL_PAGE) {
         struct page_select *page_select = select_from_page(curr_page, num_of_filter, filters);
         handle_page_select(page_select, table->table_scheme, table->num_of_columns);
+
+        file_offset prev_page = curr_page->prev_page;
+
         if (curr_page != table->last_page) {
             free_page(curr_page, table->table_scheme, table->num_of_columns);
         }
-        curr_page = read_page(db->file, curr_page->prev_page, table->table_scheme, table->num_of_columns);
+        curr_page = read_page(db->file, prev_page, table->table_scheme, table->num_of_columns);
     }
 
     struct page_select *page_select = select_from_page(curr_page, num_of_filter, filters);

@@ -33,7 +33,7 @@ struct tuple *read_tuple(uint64_t num_of_attributes, const enum data_type *table
                 struct string_field *string_field = my_malloc(sizeof(struct string_field));
                 fread(&string_field->size, sizeof(uint16_t), 1, file);
                 string_field->data = my_malloc(string_field->size * sizeof(char));
-                fread(string_field->data, string_field->size, 1, file);
+                fread(string_field->data, sizeof(char), string_field->size, file);
                 data[i] = string_field;
                 break;
             }

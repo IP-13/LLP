@@ -17,11 +17,11 @@ enum filter_type {
     STR_NEQ,
     INT_GR,
     INT_LESS,
-    INT_GRE_EQ,
+    INT_GR_EQ,
     INT_LESS_EQ,
     FLOAT_GR,
     FLOAT_LESS,
-    FLOAT_GRE_EQ,
+    FLOAT_GR_EQ,
     FLOAT_LESS_EQ,
     STR_LIKE
 };

@@ -11,10 +11,11 @@ add_executable(main
         src/util/table_list.c
         src/util/column_list.c
         src/util/launch_db.c
+        src/util/util.c
         src/page/page.c
         src/tuple/tuple.c
         src/tuple/filters.c
         src/table/table.c
         src/tests/tests.c
         src/tests/stress_tests.c
-        )
+        include/is_test.h)

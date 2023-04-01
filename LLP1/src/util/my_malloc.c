@@ -3,8 +3,8 @@
 #include <bits/types/FILE.h>
 #include <stdio.h>
 #include "my_malloc.h"
+#include "is_test.h"
 
-//#define TEST
 
 static FILE *file;
 static int curr_memory = 0;
@@ -36,7 +36,7 @@ static void memory_change() {
 
 void *my_malloc(size_t size) {
     curr_memory += ((int) size);
-#if defined TEST
+#if defined MEMORY_TEST
     memory_change();
 #endif
     return malloc(size);
@@ -45,7 +45,7 @@ void *my_malloc(size_t size) {
 
 void my_free(void *ptr, size_t size) {
     curr_memory -= ((int) size);
-#if defined TEST
+#if defined MEMORY_TEST
     memory_change();
 #endif
     free(ptr);

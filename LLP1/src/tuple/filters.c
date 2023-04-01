@@ -51,7 +51,7 @@ int is_match(struct tuple *tuple, struct filter *filter) {
                 return 1;
             else
                 return 0;
-        case INT_GRE_EQ:
+        case INT_GR_EQ:
             if (((struct int_field *) tuple->data[filter->attribute_num])->data >= *((int *) filter->value))
                 return 1;
             else
@@ -71,7 +71,7 @@ int is_match(struct tuple *tuple, struct filter *filter) {
                 return 1;
             else
                 return 0;
-        case FLOAT_GRE_EQ:
+        case FLOAT_GR_EQ:
             if (((struct float_field *) tuple->data[filter->attribute_num])->data >= *((float *) filter->value))
                 return 1;
             else

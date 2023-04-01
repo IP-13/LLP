@@ -7,12 +7,10 @@
 int main() {
 //    insert_stress_test(30);
 
-    launch_db();
+    select_stress_test(1000, 1000);
+
+//    launch_db();
 
     return 0;
 }
 
-// 59238
-// 50518
-// 41870
-// 33154
