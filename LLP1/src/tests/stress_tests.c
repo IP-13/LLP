@@ -4,7 +4,7 @@
 #include "tests.h"
 
 
-void insert_test() {
+void insert_stress_test(int num_of_elements) {
     time_t t;
     srand((unsigned) time(&t));
 
@@ -19,7 +19,7 @@ void insert_test() {
 
     FILE *insert_time = fopen("insert_stress_test_time.txt", "w+");
 
-    for (size_t i = 0; i < 10000000; i++) {
+    for (size_t i = 0; i < num_of_elements; i++) {
         clock_t start = clock();
         insert_to_table(db, table1->name, create_random_tuple(table1->num_of_columns, table1->table_scheme));
         double time = clock() - start;

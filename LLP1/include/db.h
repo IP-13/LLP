@@ -37,5 +37,6 @@ void delete_from_table(struct db *db, char *table_name, uint16_t num_of_filters,
 void join_table(struct db *db, char *table1_name, char *table2_name, uint16_t num_of_filters1, struct filter **filters1,
                 uint16_t num_of_filters2, struct filter **filters2);
 
-// TODO
-//int update();
+void update_table(struct db *db, char *table_name, uint16_t num_of_filters, struct filter **filters,
+                  struct update_query *update_query);
+

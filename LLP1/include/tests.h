@@ -42,5 +42,5 @@ void page_test();
 
 
 // stress tests
-void insert_test();
+void insert_stress_test(int num_of_elements);
 

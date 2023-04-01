@@ -262,22 +262,27 @@ void insert_to_table(struct db *db, char *table_name, struct tuple *tuple) {
 void print_tuple(struct tuple *tuple, uint32_t num_of_attributes, const enum data_type *table_scheme) {
     for (size_t i = 0; i < num_of_attributes; i++) {
         switch (table_scheme[i]) {
-            case BOOL:
+            case BOOL: {
                 if (!((struct bool_field *) tuple->data[i])->data) {
                     printf("%-20s | ", "FALSE");
                 } else {
                     printf("%-20s | ", "TRUE");
                 }
                 break;
-            case INT:
+            }
+            case INT: {
                 printf("%-20"PRId32" | ", ((struct int_field *) tuple->data[i])->data);
                 break;
-            case FLOAT:
+            }
+            case FLOAT: {
                 printf("%-20f | ", ((struct float_field *) tuple->data[i])->data);
                 break;
-            case STRING:
-                printf("%-20s | ", ((struct string_field *) tuple->data[i])->data);
+            }
+            case STRING: {
+                struct string_field *string_field = tuple->data[i];
+                printf("%-20s | ", string_field->data);
                 break;
+            }
             default:
                 printf("Something went wrong\n");
         }
@@ -467,7 +472,6 @@ void join_table(struct db *db, char *table1_name, char *table2_name, uint16_t nu
     struct page_select *page_select1 = select_from_page(curr_page1, num_of_filters1, filters1);
 
 
-
     struct page *curr_page2 = table2->last_page;
 
     while (curr_page2->prev_page.offset != NULL_PAGE) {
@@ -503,8 +507,38 @@ void join_table(struct db *db, char *table1_name, char *table2_name, uint16_t nu
     }
 
 
-
     if (curr_page1 != table1->last_page) {
         free_page(curr_page1, table1->table_scheme, table1->num_of_columns);
     }
 }
+
+
+void update_table(struct db *db, char *table_name, uint16_t num_of_filters, struct filter **filters,
+                  struct update_query *update_query) {
+    struct table_list *table_list = table_list_get(db->table_list, get_table_index_by_name(db->table_list, table_name));
+
+    if (table_list == NULL) {
+        return;
+    }
+
+    struct table *table = table_list->value;
+
+    if (table == NULL) {
+        return;
+    }
+
+    struct page *curr_page = table->last_page;
+
+    while (curr_page != NULL) {
+        page_update(db, table, curr_page, num_of_filters, filters, update_query);
+        file_offset prev_page = curr_page->prev_page;
+
+        if (curr_page != table->last_page) {
+            write_page(curr_page, table->num_of_columns, table->table_scheme, db->file);
+            free_page(curr_page, table->table_scheme, table->num_of_columns);
+        }
+
+        curr_page = read_page(db->file, prev_page, table->table_scheme, table->num_of_columns);
+    }
+}
+

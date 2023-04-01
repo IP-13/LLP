@@ -53,20 +53,27 @@ int write_tuple(struct tuple *tuple, uint64_t num_of_attributes, const enum data
 
     for (size_t i = 0; i < num_of_attributes; i++) {
         switch (table_scheme[i]) {
-            case BOOL:
-                fwrite(tuple->data[i], sizeof(struct bool_field), 1, file);
+            case BOOL: {
+                struct bool_field *bool_field = tuple->data[i];
+                fwrite(&bool_field->data, sizeof(int32_t), 1, file);
                 break;
-            case INT:
-                fwrite(tuple->data[i], sizeof(struct int_field), 1, file);
+            }
+            case INT: {
+                struct int_field *int_field = tuple->data[i];
+                fwrite(&int_field->data, sizeof(int32_t), 1, file);
                 break;
-            case FLOAT:
-                fwrite(tuple->data[i], sizeof(struct float_field), 1, file);
+            }
+            case FLOAT: {
+                struct float_field *float_field = tuple->data[i];
+                fwrite(&float_field->data, sizeof(float), 1, file);
                 break;
-            case STRING:
-                fwrite(&((struct string_field *) tuple->data[i])->size, sizeof(uint16_t), 1, file);
-                fwrite(((struct string_field *) tuple->data[i])->data, sizeof(char),
-                       ((struct string_field *) tuple->data[i])->size, file);
+            }
+            case STRING: {
+                struct string_field *string_field = tuple->data[i];
+                fwrite(&string_field->size, sizeof(uint16_t), 1, file);
+                fwrite(string_field->data, sizeof(char),string_field->size, file);
                 break;
+            }
             default:
                 return 0;
         }

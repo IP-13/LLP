@@ -14,7 +14,7 @@
 struct tuple {
     page_offset start; // in file
     void **data; // in file
-    uint16_t size; // not in file
+    uint16_t size; // not in file    data size
 };
 
 struct bool_field {

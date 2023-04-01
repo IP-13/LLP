@@ -40,6 +40,10 @@ void rewrite_page(FILE *file, file_offset old_offset, file_offset new_offset) {
 
 
 struct page *read_page_info(FILE *file, file_offset file_offset) {
+    if (file_offset.offset == NULL_PAGE) {
+        return NULL;
+    }
+
     fseek(file, file_offset.offset, SEEK_SET);
 
     struct page *page = my_malloc(sizeof(struct page));
@@ -55,6 +59,10 @@ struct page *read_page_info(FILE *file, file_offset file_offset) {
 
 
 struct page *read_page(FILE *file, file_offset file_offset, enum data_type *table_scheme, uint64_t num_of_attributes) {
+    if (file_offset.offset == NULL_PAGE) {
+        return NULL;
+    }
+
     struct page *page = read_page_info(file, file_offset);
 
     page->total_free_space_size = PAGE_SIZE - page->free_space_offset.offset;
@@ -210,8 +218,89 @@ uint64_t delete_from_page(struct page *page, uint16_t num_of_filters, struct fil
     return deleted_tuples;
 }
 
-// TODO update
-//int update_tuples(struct page *page, uint16_t num_of_filter, struct filter_type **filter_type) {
-//
-//}
+
+void page_update(struct db *db, struct table *table, struct page *page, uint16_t num_of_filters,
+                 struct filter **filters, struct update_query *update_query) {
+    for (size_t i = 0; i < page->num_of_tuples; i++) {
+        int is_failed = 0;
+
+        for (size_t j = 0; j < num_of_filters; j++) {
+            if (!is_match(page->tuples[i], filters[j])) {
+                is_failed = 1;
+                break;
+            }
+        }
+
+        if (is_failed) {
+            continue;
+        }
+
+        page->total_free_space_size += data_size(page->tuples[i]->data, table->table_scheme, table->num_of_columns);
+
+        struct tuple *new_tuple = page->tuples[i];
+
+        page->tuples[i] = page->tuples[page->num_of_tuples - 1];
+
+        page->num_of_tuples--;
+
+        for (size_t k = 0; k < update_query->num_of_updates; k++) {
+            uint16_t update_attr_num = update_query->update_values[k]->attribute_num;
+            void *new_value = update_query->update_values[k]->value;
+
+            switch (table->table_scheme[update_attr_num]) {
+                case BOOL: {
+                    struct bool_field *bool_field = new_tuple->data[update_attr_num];
+                    bool_field->data = *((int32_t *) new_value);
+                    break;
+                }
+                case INT: {
+                    struct int_field *int_field = new_tuple->data[update_attr_num];
+                    int_field->data = *((int32_t *) new_value);
+                    break;
+                }
+                case FLOAT: {
+                    struct float_field *float_field = new_tuple->data[update_attr_num];
+                    float_field->data = *((float *) new_value);
+                    break;
+                }
+                case STRING: {
+                    struct string_field *string_field = new_tuple->data[update_attr_num];
+                    my_free(string_field->data, string_field->size * sizeof(char));
+                    string_field->size = strlen((char *) new_value);
+                    string_field->data = my_malloc(string_field->size * sizeof(char));
+                    memcpy(string_field->data, new_value, string_field->size);
+                    break;
+                }
+            }
+        }
+
+        new_tuple->size = data_size(new_tuple->data, table->table_scheme, table->num_of_columns);
+
+        int is_inserted = insert_to_page(page, new_tuple);
+
+        if (!is_inserted) {
+            i--;
+
+            int is_inserted_last_page = insert_to_page(table->last_page, new_tuple);
+
+            if (!is_inserted_last_page) {
+                struct page *new_page = create_page(db->last_page_offset, table->last_page->offset,
+                                                    (file_offset) {.offset = NULL_PAGE});
+
+                db->last_page_offset.offset += PAGE_SIZE;
+
+                insert_to_page(new_page, new_tuple);
+
+                table->last_page_offset = new_page->offset;
+                table->last_page->next_page = new_page->offset;
+                free_page(table->last_page, table->table_scheme, table->num_of_columns);
+                table->last_page = new_page;
+            }
+        } else {
+            struct tuple *temp = page->tuples[i];
+            page->tuples[i] = page->tuples[page->num_of_tuples - 1];
+            page->tuples[page->num_of_tuples - 1] = temp;
+        }
+    }
+}
 

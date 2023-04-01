@@ -3,6 +3,99 @@
 #include "launch_db.h"
 
 
+struct update_value *scanf_update_value(const enum data_type *table_scheme) {
+    struct update_value *update_value = my_malloc(sizeof(struct update_value));
+    printf("Enter updated attribute num: ");
+    uint16_t attribute_num;
+    scanf("%"SCNu16"", &attribute_num);
+    update_value->attribute_num = attribute_num;
+
+    switch (table_scheme[attribute_num]) {
+        case BOOL: {
+            printf("Enter updated bool attribute value: ");
+            update_value->value = my_malloc(sizeof(int32_t));
+            scanf("%"SCNd32"", (int32_t *) update_value->value);
+            break;
+        }
+        case INT: {
+            printf("Enter updated int attribute value: ");
+            update_value->value = my_malloc(sizeof(int32_t));
+            scanf("%"SCNd32"", (int32_t *) update_value->value);
+            break;
+        }
+        case FLOAT: {
+            printf("Enter updated float attribute value: ");
+            update_value->value = my_malloc(sizeof(float));
+            scanf("%f", (float *) update_value->value);
+            break;
+        }
+        case STRING: {
+            printf("Enter updated string attribute value: ");
+            char s[100];
+            scanf("%s", s);
+            uint16_t size = strlen(s);
+            update_value->value = my_malloc(size * sizeof(char));
+            memcpy(update_value->value, s, size);
+            break;
+        }
+    }
+
+    return update_value;
+}
+
+
+struct update_query *scanf_update_query(enum data_type *table_scheme) {
+    struct update_query *update_query = my_malloc(sizeof(struct update_query));
+    printf("Enter num of updated values: ");
+    uint16_t num_of_updates;
+    scanf("%"SCNu16"", &num_of_updates);
+
+    update_query->num_of_updates = num_of_updates;
+    update_query->update_values = my_malloc(num_of_updates * sizeof(struct update_value *));
+
+    for (size_t i = 0; i < num_of_updates; i++) {
+        update_query->update_values[i] = scanf_update_value(table_scheme);
+    }
+
+    return update_query;
+}
+
+
+void free_update_value(struct update_value *update_value, const enum data_type *table_scheme) {
+    switch (table_scheme[update_value->attribute_num]) {
+        case BOOL: {
+            my_free(update_value->value, sizeof(int32_t));
+            break;
+        }
+        case INT: {
+            my_free(update_value->value, sizeof(int32_t));
+            break;
+        }
+        case FLOAT: {
+            my_free(update_value->value, sizeof(float));
+            break;
+        }
+        case STRING: {
+            uint16_t size = strlen(update_value->value);
+            my_free(update_value->value, size * sizeof(char));
+            break;
+        }
+    }
+
+    my_free(update_value, sizeof(struct update_value));
+}
+
+
+void free_update_query(struct update_query *update_query, enum data_type *table_scheme) {
+    for (size_t i = 0; i < update_query->num_of_updates; i++) {
+        free_update_value(update_query->update_values[i], table_scheme);
+    }
+
+    my_free(update_query->update_values, update_query->num_of_updates * sizeof(struct update_value *));
+    my_free(update_query, sizeof(struct update_query));
+}
+
+
 size_t str_len(const char *str) {
     size_t size = 0;
     while (str[size] != '\0') {
@@ -247,7 +340,7 @@ void launch_db() {
     enum command_type command = 0;
 
     while (command != EXIT) {
-        printf("Available:\n0. create table\n1. delete table\n2. insert\n3. select\n4. delete\n5. update\n6. join\n7. exit\n");
+        printf("Available:\n0. create table\n1. delete table\n2. insert\n3. select\n4. delete\n5. update_table\n6. join\n7. exit\n");
         printf("Enter command number: ");
         scanf("%d", &command);
 
@@ -316,7 +409,30 @@ void launch_db() {
                 break;
             }
             case UPDATE: {
-                // TODO
+                char *table_name = scanf_table_name();
+                uint16_t num_of_filters = scanf_num_of_filters();
+                struct filter **filters = scanf_filters(num_of_filters);
+
+                struct table_list *table_list = table_list_get(
+                        db->table_list, get_table_index_by_name(db->table_list, table_name));
+
+                if (table_list == NULL) {
+                    break;
+                }
+
+                struct table *table = table_list->value;
+
+                if (table == NULL) {
+                    break;
+                }
+
+                struct update_query *update_query = scanf_update_query(table->table_scheme);
+
+                update_table(db, table_name, num_of_filters, filters, update_query);
+
+                free_update_query(update_query, table->table_scheme);
+                free_filters(filters, num_of_filters);
+                my_free(table_name, TABLE_NAME_SIZE);
                 break;
             }
             case JOIN : {

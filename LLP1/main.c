@@ -5,9 +5,9 @@
 
 
 int main() {
-    insert_test();
+//    insert_stress_test(30);
 
-    //    launch_db();
+    launch_db();
 
     return 0;
 }

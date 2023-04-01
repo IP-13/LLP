@@ -4,6 +4,7 @@
 
 #define INT_RANGE 1000000
 #define FLOAT_RANGE 1000
+#define RANDOM_STRING_SIZE 20
 
 struct table *create_test_table1() {
     struct column_list *column_list1 = create_column_list();
@@ -30,7 +31,7 @@ struct table *create_test_table1() {
     table1_offset.offset = PAGE_SIZE;
     uint64_t table1_name_size = 11;
     char *table1_name = my_malloc(table1_name_size);
-    memcpy(table1_name, "first table", table1_name_size);
+    memcpy(table1_name, "table1", table1_name_size);
     uint64_t table1_num_of_columns = 3;
     struct table *table1 = create_table(table1_name_size, table1_name, table1_num_of_columns, column_list1);
 
@@ -81,22 +82,22 @@ struct table *create_test_table3() {
     col3_1->data_type = STRING;
     col3_1->name_size = 6;
     col3_1->name = my_malloc(col3_1->name_size * sizeof(char));
-    memcpy(col3_1->name, "digits", col3_1->name_size);
+    memcpy(col3_1->name, "some_name", col3_1->name_size);
     struct column *col3_2 = my_malloc(sizeof(struct column));
     col3_2->data_type = STRING;
     col3_2->name_size = 4;
     col3_2->name = my_malloc(col3_2->name_size * sizeof(char));
-    memcpy(col3_2->name, "1234", col3_2->name_size);
+    memcpy(col3_2->name, "col3_2", col3_2->name_size);
     struct column *col3_3 = my_malloc(sizeof(struct column));
     col3_3->data_type = STRING;
     col3_3->name_size = 9;
     col3_3->name = my_malloc(col3_3->name_size * sizeof(char));
-    memcpy(col3_3->name, "col3_3 name", col3_3->name_size);
+    memcpy(col3_3->name, "name", col3_3->name_size);
     struct column *col3_4 = my_malloc(sizeof(struct column));
     col3_4->data_type = STRING;
     col3_4->name_size = 11;
     col3_4->name = my_malloc(col3_4->name_size * sizeof(char));
-    memcpy(col3_4->name, "qwerty_name", col3_4->name_size);
+    memcpy(col3_4->name, "hippopotamus", col3_4->name_size);
     column_list_push(column_list3, col3_1);
     column_list_push(column_list3, col3_2);
     column_list_push(column_list3, col3_3);
@@ -106,7 +107,7 @@ struct table *create_test_table3() {
     table3_offset.offset = 3 * PAGE_SIZE;
     uint64_t table3_name_size = 10;
     char *table3_name = my_malloc(table3_name_size);
-    memcpy(table3_name, "last table", table3_name_size);
+    memcpy(table3_name, "last_table", table3_name_size);
     uint64_t table3_num_of_columns = 4;
     struct table *table3 = create_table(table3_name_size, table3_name, table3_num_of_columns, column_list3);
 
@@ -158,7 +159,8 @@ void print_page(struct page *page, uint32_t num_of_attributes, enum data_type *t
 char *create_random_string(int32_t size) {
     char *s = my_malloc(size);
     for (size_t i = 0; i < size; i++) {
-        s[i] = (char) ('a' + rand() % 26);
+        char random_char = (char) ('A' + rand() % 26);
+        memcpy(&s[i], &random_char, 1);
     }
 
     return s;
@@ -189,7 +191,7 @@ struct tuple *create_random_tuple(uint64_t num_of_attributes, const enum data_ty
             }
             case STRING: {
                 struct string_field *string_field = my_malloc(sizeof(struct string_field));
-                string_field->size = (rand() % 20) + 1;
+                string_field->size = (rand() % RANDOM_STRING_SIZE) + 1;
                 string_field->data = create_random_string(string_field->size);
                 data[i] = string_field;
                 break;
