@@ -119,6 +119,8 @@ int get_table_index_by_name(struct table_list *table_list, const char *name) {
         return -1;
     }
 
+
+
     if (strcmp(table_list->value->name, name) == 0) {
         return 0;
     }

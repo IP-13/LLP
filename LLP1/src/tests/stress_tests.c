@@ -62,11 +62,13 @@ void select_stress_test(int num_of_elements, int num_of_selects) {
     select_from_table(db, table->name, 0, null_filters);
 
     for (size_t i = 0; i < num_of_selects; i++) {
-        struct filter **filters = create_random_filters(1, table->num_of_columns, table->table_scheme);
+        uint16_t num_of_filters = 1;
+
+        struct filter **filters = create_random_filters(num_of_filters, table->num_of_columns, table->table_scheme);
 
         clock_t start = clock();
 
-        select_from_table(db, table->name, 1, filters);
+        select_from_table(db, table->name, num_of_filters, filters);
 
         double time = clock() - start;
         char *str[20];
@@ -80,3 +82,67 @@ void select_stress_test(int num_of_elements, int num_of_selects) {
 
     close_db(db);
 }
+
+
+void delete_asymptotic_test(int max_num_of_elements) {
+    if (max_num_of_elements <= 100) {
+        max_num_of_elements = 100;
+    }
+
+    time_init();
+
+    char *db_name = my_malloc(DB_NAME_SIZE);
+    memcpy(db_name, "delete_asymptotic_test.txt", DB_NAME_SIZE);
+
+    struct db *db = open_db(db_name);
+
+    FILE *delete_asymptotic_time_file = fopen("delete_asymptotic_time.txt", "w+");
+
+    uint16_t num_of_filters = 1;
+    struct filter **filters = my_malloc(sizeof(struct filter *));
+    struct filter *filter = my_malloc(sizeof(struct filter));
+    filter->attribute_num = 0;
+    filter->filter_type = FLOAT_GR_EQ;
+    float *value = my_malloc(sizeof(float));
+    *value = 500;
+    filter->value = value;
+    filters[0] = filter;
+
+    for (size_t i = 1; i <= max_num_of_elements; i++) {
+        printf("%zu\n", i);
+
+        struct table *table = create_test_table2();
+
+        add_table(db, table);
+
+        for (size_t j = 0; j < i; j++) {
+            insert_to_table(db, table->name, create_random_tuple(table->num_of_columns, table->table_scheme));
+        }
+
+        clock_t start = clock();
+
+        delete_from_table(db, table->name, num_of_filters, filters);
+
+        double time = clock() - start;
+        char *str[20];
+        sprintf(str, "%.10f", (double) time);
+        fwrite(str, 10 * sizeof(char), 1, delete_asymptotic_time_file);
+        char space = '\n';
+        fwrite(&space, sizeof(char), 1, delete_asymptotic_time_file);
+
+        delete_table(db, table->name);
+    }
+
+    my_free(value, sizeof(float));
+    my_free(filter, sizeof(struct filter));
+    my_free(filters, sizeof(struct filter *));
+
+
+    close_db(db);
+}
+
+
+void update_asymptotic_test(int num_of_elements) {
+
+}
+

@@ -130,10 +130,11 @@ uint16_t data_size(void **data, const enum data_type *table_scheme, uint64_t num
             case FLOAT:
                 data_size += sizeof(struct float_field);
                 break;
-            case STRING:
+            case STRING: {
                 data_size += sizeof(uint16_t);
                 data_size += (((struct string_field *) data[i])->size * sizeof(char));
                 break;
+            }
         }
     }
 

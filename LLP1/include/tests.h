@@ -26,3 +26,8 @@ void insert_stress_test(int num_of_elements);
 
 void select_stress_test(int num_of_elements, int num_of_selects);
 
+// asymptotic tests
+
+void delete_asymptotic_test(int num_of_elements);
+
+void update_asymptotic_test(int num_of_elements);

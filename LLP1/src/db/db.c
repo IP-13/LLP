@@ -167,6 +167,11 @@ void close_db(struct db *db) {
 
 
 int add_table(struct db *db, struct table *table) {
+    if (db->table_list == NULL) {
+        db->table_list = create_table_list();
+    }
+
+
     if (get_table_index_by_name(db->table_list, table->name) != -1) {
         return 0;
     }
@@ -187,12 +192,12 @@ int add_table(struct db *db, struct table *table) {
 }
 
 // checks if last db page is last page of any table
-void check_if_last_page(struct db *db, file_offset last_db_page_offset, file_offset delete_page_offset) {
+void check_if_last_page(struct db *db, file_offset last_db_page_offset, file_offset new_offset) {
     for (size_t i = 0; i < db->num_of_tables; i++) {
         struct table *curr_table = table_list_get(db->table_list, i)->value;
         if (curr_table->last_page_offset.offset == last_db_page_offset.offset) {
-            curr_table->last_page_offset.offset = delete_page_offset.offset;
-            curr_table->last_page->offset.offset = delete_page_offset.offset;
+            curr_table->last_page_offset.offset = new_offset.offset;
+            curr_table->last_page->offset.offset = new_offset.offset;
         }
     }
 }
@@ -222,8 +227,13 @@ int delete_table(struct db *db, char *name) {
         my_free(curr_page_info, sizeof(struct page));
     }
 
+
     table_list_remove(&db->table_list, get_table_index_by_name(db->table_list, name));
     db->num_of_tables--;
+
+    if (db->num_of_tables == 0) {
+        db->table_list = create_table_list();
+    }
 
     return 1;
 }
@@ -338,6 +348,60 @@ void select_from_table(struct db *db, char *table_name, uint16_t num_of_filter, 
 }
 
 
+void relocate_tuples(struct page *from, struct page *to, struct table *table, struct db *db) {
+    while (from->num_of_tuples > 0) {
+        struct tuple *last_tuple = from->tuples[from->num_of_tuples - 1];
+
+        int is_inserted = insert_to_page(to, last_tuple);
+
+        if (!is_inserted) {
+            break;
+        }
+
+        from->num_of_tuples--;
+        from->total_free_space_size += last_tuple->size;
+    }
+
+    if (from->num_of_tuples == 0) {
+        db->last_page_offset.offset -= PAGE_SIZE;
+
+        check_if_last_page(db, db->last_page_offset, from->offset);
+
+        rewrite_page(db->file, db->last_page_offset, from->offset);
+
+        file_offset prev_page = from->prev_page;
+
+        free_page(from, table->table_scheme, table->num_of_columns);
+
+        if (prev_page.offset == to->offset.offset) {
+            write_page(to, table->num_of_columns, table->table_scheme, db->file);
+        }
+
+        from = read_page(db->file, prev_page, table->table_scheme, table->num_of_columns);
+
+        table->last_page = from;
+        table->last_page_offset.offset = from->offset.offset;
+    }
+
+    if (from->offset.offset == to->offset.offset) {
+        return;
+    }
+
+    while (from->num_of_tuples > 0) {
+        struct tuple *last_tuple = from->tuples[from->num_of_tuples - 1];
+
+        int is_inserted = insert_to_page(to, last_tuple);
+
+        if (!is_inserted) {
+            break;
+        }
+
+        from->num_of_tuples--;
+        from->total_free_space_size += last_tuple->size;
+    }
+}
+
+
 void delete_from_table(struct db *db, char *table_name, uint16_t num_of_filters, struct filter **filters) {
     struct table_list *table_list = table_list_get(db->table_list, get_table_index_by_name(db->table_list, table_name));
 
@@ -351,48 +415,24 @@ void delete_from_table(struct db *db, char *table_name, uint16_t num_of_filters,
         return;
     }
 
-    delete_from_page(table->last_page, num_of_filters, filters, table->table_scheme, table->num_of_columns);
+    struct page *curr_page = table->last_page;
 
-    if (table->last_page->prev_page.offset == NULL_PAGE) {
-        return;
-    }
-
-    struct page *curr_page = read_page(db->file, table->last_page->prev_page,
-                                       table->table_scheme, table->num_of_columns);
-
-    while (curr_page->prev_page.offset != NULL_PAGE) {
+    while (curr_page != NULL) {
         delete_from_page(curr_page, num_of_filters, filters, table->table_scheme, table->num_of_columns);
-        while (table->last_page->num_of_tuples > 0) {
-            int is_inserted = insert_to_page(curr_page, table->last_page->tuples[table->last_page->num_of_tuples - 1]);
-            if (!is_inserted) {
-                break;
-            }
-            table->last_page->num_of_tuples--;
+
+        if (curr_page == table->last_page) {
+            curr_page = read_page(db->file, table->last_page->prev_page, table->table_scheme, table->num_of_columns);
+            continue;
         }
 
-        if (table->last_page->num_of_tuples == 0) {
-            db->last_page_offset.offset -= PAGE_SIZE;
+        relocate_tuples(table->last_page, curr_page, table, db);
 
-            check_if_last_page(db, db->last_page_offset, table->last_page_offset);
+        file_offset prev_page = curr_page->prev_page;
 
-            rewrite_page(db->file, db->last_page_offset, table->last_page_offset);
-
-            file_offset prev_page = table->last_page->prev_page;
-
-            free_page(table->last_page, table->table_scheme, table->num_of_columns);
-
-            if (prev_page.offset == NULL_PAGE) {
-                table->last_page = create_page(db->last_page_offset,
-                                               (file_offset) {.offset = NULL_PAGE},
-                                               (file_offset) {.offset = NULL_PAGE});
-                db->last_page_offset.offset += PAGE_SIZE;
-            } else {
-                table->last_page = read_page(db->file, prev_page, table->table_scheme, table->num_of_columns);
-            }
-        }
+        write_page(curr_page, table->num_of_columns, table->table_scheme, db->file);
+        free_page(curr_page, table->table_scheme, table->num_of_columns);
+        curr_page = read_page(db->file, prev_page, table->table_scheme, table->num_of_columns);
     }
-
-    delete_from_page(curr_page, num_of_filters, filters, table->table_scheme, table->num_of_columns);
 }
 
 

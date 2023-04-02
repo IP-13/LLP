@@ -14,6 +14,10 @@ uint16_t get_free_space(struct page *page) {
 
 
 void rewrite_page(FILE *file, file_offset old_offset, file_offset new_offset) {
+    if (old_offset.offset == new_offset.offset) {
+        return;
+    }
+
     struct page *page = read_page_info(file, old_offset);
 
     if (page->prev_page.offset != NULL_PAGE) {
@@ -200,9 +204,10 @@ uint64_t delete_from_page(struct page *page, uint16_t num_of_filters, struct fil
             if (!is_match(page->tuples[i], filters[j])) {
                 break;
             }
-            if (j == num_of_filters - 1) {
+            if (j == num_of_filters - 1 && page->num_of_tuples > 1) {
                 struct tuple *temp = page->tuples[i];
                 page->tuples[i] = page->tuples[page->num_of_tuples - 1];
+                page->total_free_space_size += (data_size(temp->data, table_scheme, num_of_filters) + sizeof(uint16_t));
                 free_tuple(temp, table_scheme, num_of_attributes);
                 deleted_tuples++;
                 page->num_of_tuples--;
@@ -211,7 +216,7 @@ uint64_t delete_from_page(struct page *page, uint16_t num_of_filters, struct fil
         }
     }
 
-    if (deleted_tuples != 0) {
+    if (deleted_tuples != 0) { // TODO is necessary?
         vacuum_page(page);
     }
 
@@ -235,7 +240,8 @@ void page_update(struct db *db, struct table *table, struct page *page, uint16_t
             continue;
         }
 
-        page->total_free_space_size += data_size(page->tuples[i]->data, table->table_scheme, table->num_of_columns);
+        page->total_free_space_size +=
+                (data_size(page->tuples[i]->data, table->table_scheme, table->num_of_columns) + sizeof(uint16_t));
 
         struct tuple *new_tuple = page->tuples[i];
 
