@@ -9,7 +9,9 @@ int main() {
 
 //    select_stress_test(1000, 1000);
 
-    delete_asymptotic_test(1000);
+//    delete_asymptotic_test(1000);
+
+    update_asymptotic_test(1000);
 
 //    launch_db();
 

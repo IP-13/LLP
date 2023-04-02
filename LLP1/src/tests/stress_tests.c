@@ -142,7 +142,65 @@ void delete_asymptotic_test(int max_num_of_elements) {
 }
 
 
-void update_asymptotic_test(int num_of_elements) {
+void update_asymptotic_test(int max_num_of_elements) {
+    if (max_num_of_elements <= 100) {
+        max_num_of_elements = 100;
+    }
 
+    time_init();
+
+    char *db_name = my_malloc(DB_NAME_SIZE);
+    memcpy(db_name, "update_asymptotic_test.txt", DB_NAME_SIZE);
+
+    struct db *db = open_db(db_name);
+
+    FILE *update_asymptotic_time_file = fopen("update_asymptotic_time.txt", "w+");
+
+    uint16_t num_of_filters = 0;
+    struct filter **filters = NULL;
+
+    char *value = "qwerty";
+    uint16_t value_size = str_len(value);
+
+    uint16_t num_of_updates = 1;
+    struct update_value *update_value = my_malloc(sizeof(struct update_value));
+    update_value->attribute_num = 3;
+    update_value->value = my_malloc(value_size * sizeof(char));
+    memcpy(update_value->value, value, value_size);
+
+    struct update_query *update_query = my_malloc(sizeof(struct update_query));
+    update_query->num_of_updates = num_of_updates;
+    update_query->update_values = my_malloc(num_of_updates * sizeof(struct update_value *));
+    update_query->update_values[0] = update_value;
+
+    for (size_t i = 1; i <= max_num_of_elements; i++) {
+        printf("%zu\n", i);
+
+        struct table *table = create_test_table3();
+
+        add_table(db, table);
+
+        for (size_t j = 0; j < i; j++) {
+            insert_to_table(db, table->name, create_random_tuple(table->num_of_columns, table->table_scheme));
+        }
+
+        clock_t start = clock();
+
+        update_table(db, table->name, num_of_filters, filters, update_query);
+
+        double time = clock() - start;
+        char *str[20];
+        sprintf(str, "%.10f", (double) time);
+        fwrite(str, 10 * sizeof(char), 1, update_asymptotic_time_file);
+        char space = '\n';
+        fwrite(&space, sizeof(char), 1, update_asymptotic_time_file);
+
+        delete_table(db, table->name);
+    }
+
+    my_free(update_query->update_values, num_of_updates * sizeof(struct update_value *));
+    my_free(update_query, sizeof(struct update_query));
+    my_free(update_value->value, value_size * sizeof(char));
+    my_free(update_value, sizeof(struct update_value));
 }
 
