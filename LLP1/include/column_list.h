@@ -2,14 +2,10 @@
 
 #include <inttypes.h>
 #include <stdio.h>
-#include "my_malloc.h"
 #include <string.h>
-#include "table.h"
+#include "my_malloc.h"
+#include "structures.h"
 
-struct column_list {
-    struct column *value;
-    struct column_list *next;
-};
 
 void clear_column_node(struct column_list *column_list);
 

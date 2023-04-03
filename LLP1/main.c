@@ -11,9 +11,9 @@ int main() {
 
 //    delete_asymptotic_test(1000);
 
-    update_asymptotic_test(1000);
+//    update_asymptotic_test(1000);
 
-//    launch_db();
+    launch_db();
 
     return 0;
 }

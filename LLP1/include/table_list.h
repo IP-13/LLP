@@ -2,14 +2,10 @@
 
 #include <inttypes.h>
 #include <stdio.h>
-#include "my_malloc.h"
 #include <string.h>
-#include "table.h"
+#include "my_malloc.h"
+#include "structures.h"
 
-struct table_list {
-    struct table *value;
-    struct table_list *next;
-};
 
 struct table_list *create_table_list();
 

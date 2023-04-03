@@ -1,10 +1,8 @@
 #pragma once
 
 #include "db.h"
-#include "table.h"
-#include "is_test.h"
 
-struct db *create_db(char *filename) {
+static struct db *create_db(char *filename) {
     FILE *file = fopen(filename, "w+");
     file_offset last_page_offset = (file_offset) {.offset = 0};
     struct table_list *table_list = create_table_list();
@@ -20,7 +18,7 @@ struct db *create_db(char *filename) {
 }
 
 
-struct column_list *read_column_list(FILE *file, uint64_t num_of_columns) {
+static struct column_list *read_column_list(FILE *file, uint64_t num_of_columns) {
     struct column_list *column_list = create_column_list();
 
     for (size_t i = 0; i < num_of_columns; i++) {
@@ -46,7 +44,7 @@ struct column_list *read_column_list(FILE *file, uint64_t num_of_columns) {
 }
 
 
-struct table_list *read_table_list(FILE *file, uint64_t num_of_tables, file_offset db_last_page_offset) {
+static struct table_list *read_table_list(FILE *file, uint64_t num_of_tables, file_offset db_last_page_offset) {
     struct table_list *table_list = create_table_list();
 
     fseek(file, db_last_page_offset.offset, SEEK_SET);
@@ -91,6 +89,112 @@ struct table_list *read_table_list(FILE *file, uint64_t num_of_tables, file_offs
 }
 
 
+static void write_columns(struct column_list *column_list, FILE *file, size_t num_of_columns) {
+    for (size_t i = 0; i < num_of_columns; i++) {
+        struct column *column = column_list_get(column_list, i)->value;
+        fwrite(&column->data_type, sizeof(column->data_type), 1, file);
+        fwrite(&column->name_size, sizeof(column->name_size), 1, file);
+        fwrite(column->name, sizeof(char), column->name_size, file);
+    }
+}
+
+
+static void write_tables(struct table_list *table_list, FILE *file, size_t num_of_tables) {
+    for (size_t i = 0; i < num_of_tables; i++) {
+        struct table *table = table_list_get(table_list, i)->value;
+        fwrite(&table->last_page_offset.offset, sizeof(table->last_page_offset.offset), 1, file);
+        fwrite(&table->name_size, sizeof(table->name_size), 1, file);
+        fwrite(table->name, sizeof(char), table->name_size, file);
+        fwrite(&table->num_of_columns, sizeof(table->num_of_columns), 1, file);
+        write_columns(table->column_list, file, table->num_of_columns);
+    }
+
+    for (size_t i = 0; i < num_of_tables; i++) {
+        struct table *table = table_list_get(table_list, i)->value;
+        write_page(table->last_page, table->num_of_columns, table->table_scheme, file);
+    }
+
+    table_list_clear(table_list);
+}
+
+// checks if last db page is last page of any table
+static void check_if_last_page(struct db *db, file_offset last_db_page_offset, file_offset new_offset) {
+    for (size_t i = 0; i < db->num_of_tables; i++) {
+        struct table *curr_table = table_list_get(db->table_list, i)->value;
+        if (curr_table->last_page_offset.offset == last_db_page_offset.offset) {
+            curr_table->last_page_offset.offset = new_offset.offset;
+            curr_table->last_page->offset.offset = new_offset.offset;
+        }
+    }
+}
+
+
+static void relocate_tuples(struct page *from, struct page *to, struct table *table, struct db *db) {
+    while (from->num_of_tuples > 0) {
+        struct tuple *last_tuple = from->tuples[from->num_of_tuples - 1];
+
+        int is_inserted = insert_to_page(to, last_tuple);
+
+        if (!is_inserted) {
+            break;
+        }
+
+        from->num_of_tuples--;
+        from->total_free_space_size += last_tuple->size;
+    }
+
+    if (from->num_of_tuples == 0) {
+        db->last_page_offset.offset -= PAGE_SIZE;
+
+        check_if_last_page(db, db->last_page_offset, from->offset);
+
+        rewrite_page(db->file, db->last_page_offset, from->offset);
+
+        file_offset prev_page = from->prev_page;
+
+        free_page(from, table->table_scheme, table->num_of_columns);
+
+        if (prev_page.offset == to->offset.offset) {
+            write_page(to, table->num_of_columns, table->table_scheme, db->file);
+        }
+
+        from = read_page(db->file, prev_page, table->table_scheme, table->num_of_columns);
+
+        table->last_page = from;
+        table->last_page_offset.offset = from->offset.offset;
+    }
+
+    if (from->offset.offset == to->offset.offset) {
+        return;
+    }
+
+    while (from->num_of_tuples > 0) {
+        struct tuple *last_tuple = from->tuples[from->num_of_tuples - 1];
+
+        int is_inserted = insert_to_page(to, last_tuple);
+
+        if (!is_inserted) {
+            break;
+        }
+
+        from->num_of_tuples--;
+        from->total_free_space_size += last_tuple->size;
+    }
+}
+
+
+static void handle_page_select(struct page_select *page_select, enum data_type *table_scheme, uint64_t num_of_attributes) {
+#ifndef TEST
+    for (size_t i = 0; i < page_select->num_of_tuples; i++) {
+        print_tuple(page_select->tuples[i], num_of_attributes, table_scheme);
+        printf("\n");
+    }
+#endif
+    my_free(page_select->tuples, MAX_NUM_OF_TUPLES * sizeof(struct tuple *));
+    my_free(page_select, sizeof(struct page_select));
+}
+
+
 struct db *open_db(char *filename) {
     FILE *file = fopen(filename, "r+");
 
@@ -121,35 +225,6 @@ struct db *open_db(char *filename) {
     }
 
     return db;
-}
-
-
-void write_columns(struct column_list *column_list, FILE *file, size_t num_of_columns) {
-    for (size_t i = 0; i < num_of_columns; i++) {
-        struct column *column = column_list_get(column_list, i)->value;
-        fwrite(&column->data_type, sizeof(column->data_type), 1, file);
-        fwrite(&column->name_size, sizeof(column->name_size), 1, file);
-        fwrite(column->name, sizeof(char), column->name_size, file);
-    }
-}
-
-
-void write_tables(struct table_list *table_list, FILE *file, size_t num_of_tables) {
-    for (size_t i = 0; i < num_of_tables; i++) {
-        struct table *table = table_list_get(table_list, i)->value;
-        fwrite(&table->last_page_offset.offset, sizeof(table->last_page_offset.offset), 1, file);
-        fwrite(&table->name_size, sizeof(table->name_size), 1, file);
-        fwrite(table->name, sizeof(char), table->name_size, file);
-        fwrite(&table->num_of_columns, sizeof(table->num_of_columns), 1, file);
-        write_columns(table->column_list, file, table->num_of_columns);
-    }
-
-    for (size_t i = 0; i < num_of_tables; i++) {
-        struct table *table = table_list_get(table_list, i)->value;
-        write_page(table->last_page, table->num_of_columns, table->table_scheme, file);
-    }
-
-    table_list_clear(table_list);
 }
 
 
@@ -189,17 +264,6 @@ int add_table(struct db *db, struct table *table) {
     db->num_of_tables++;
 
     return 1;
-}
-
-// checks if last db page is last page of any table
-void check_if_last_page(struct db *db, file_offset last_db_page_offset, file_offset new_offset) {
-    for (size_t i = 0; i < db->num_of_tables; i++) {
-        struct table *curr_table = table_list_get(db->table_list, i)->value;
-        if (curr_table->last_page_offset.offset == last_db_page_offset.offset) {
-            curr_table->last_page_offset.offset = new_offset.offset;
-            curr_table->last_page->offset.offset = new_offset.offset;
-        }
-    }
 }
 
 
@@ -267,50 +331,6 @@ void insert_to_table(struct db *db, char *table_name, struct tuple *tuple) {
     }
 }
 
-// test function
-// TODO change to server
-void print_tuple(struct tuple *tuple, uint32_t num_of_attributes, const enum data_type *table_scheme) {
-    for (size_t i = 0; i < num_of_attributes; i++) {
-        switch (table_scheme[i]) {
-            case BOOL: {
-                if (!((struct bool_field *) tuple->data[i])->data) {
-                    printf("%-20s | ", "FALSE");
-                } else {
-                    printf("%-20s | ", "TRUE");
-                }
-                break;
-            }
-            case INT: {
-                printf("%-20"PRId32" | ", ((struct int_field *) tuple->data[i])->data);
-                break;
-            }
-            case FLOAT: {
-                printf("%-20f | ", ((struct float_field *) tuple->data[i])->data);
-                break;
-            }
-            case STRING: {
-                struct string_field *string_field = tuple->data[i];
-                printf("%-20s | ", string_field->data);
-                break;
-            }
-            default:
-                printf("Something went wrong\n");
-        }
-    }
-}
-
-
-void handle_page_select(struct page_select *page_select, enum data_type *table_scheme, uint64_t num_of_attributes) {
-#ifndef TEST
-    for (size_t i = 0; i < page_select->num_of_tuples; i++) {
-        print_tuple(page_select->tuples[i], num_of_attributes, table_scheme);
-        printf("\n");
-    }
-#endif
-    my_free(page_select->tuples, MAX_NUM_OF_TUPLES * sizeof(struct tuple *));
-    my_free(page_select, sizeof(struct page_select));
-}
-
 
 void select_from_table(struct db *db, char *table_name, uint16_t num_of_filter, struct filter **filters) {
     struct table_list *table_list = table_list_get(db->table_list, get_table_index_by_name(db->table_list, table_name));
@@ -344,60 +364,6 @@ void select_from_table(struct db *db, char *table_name, uint16_t num_of_filter, 
 
     if (curr_page != table->last_page) {
         free_page(curr_page, table->table_scheme, table->num_of_columns);
-    }
-}
-
-
-void relocate_tuples(struct page *from, struct page *to, struct table *table, struct db *db) {
-    while (from->num_of_tuples > 0) {
-        struct tuple *last_tuple = from->tuples[from->num_of_tuples - 1];
-
-        int is_inserted = insert_to_page(to, last_tuple);
-
-        if (!is_inserted) {
-            break;
-        }
-
-        from->num_of_tuples--;
-        from->total_free_space_size += last_tuple->size;
-    }
-
-    if (from->num_of_tuples == 0) {
-        db->last_page_offset.offset -= PAGE_SIZE;
-
-        check_if_last_page(db, db->last_page_offset, from->offset);
-
-        rewrite_page(db->file, db->last_page_offset, from->offset);
-
-        file_offset prev_page = from->prev_page;
-
-        free_page(from, table->table_scheme, table->num_of_columns);
-
-        if (prev_page.offset == to->offset.offset) {
-            write_page(to, table->num_of_columns, table->table_scheme, db->file);
-        }
-
-        from = read_page(db->file, prev_page, table->table_scheme, table->num_of_columns);
-
-        table->last_page = from;
-        table->last_page_offset.offset = from->offset.offset;
-    }
-
-    if (from->offset.offset == to->offset.offset) {
-        return;
-    }
-
-    while (from->num_of_tuples > 0) {
-        struct tuple *last_tuple = from->tuples[from->num_of_tuples - 1];
-
-        int is_inserted = insert_to_page(to, last_tuple);
-
-        if (!is_inserted) {
-            break;
-        }
-
-        from->num_of_tuples--;
-        from->total_free_space_size += last_tuple->size;
     }
 }
 

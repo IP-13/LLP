@@ -1,6 +1,6 @@
 #pragma once
 
-#include "filter_type.h"
+#include "filters.h"
 
 
 int is_match(struct tuple *tuple, struct filter *filter) {

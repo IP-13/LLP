@@ -1,13 +1,16 @@
 #pragma once
 
+#include <time.h>
 #include <stdlib.h>
-
+#include <string.h>
+#include "structures.h"
 #include "my_malloc.h"
 #include "db.h"
 #include "column_list.h"
 #include "table_list.h"
 #include "table.h"
-#include "filter_type.h"
+#include "filters.h"
+#include "tuple.h"
 #include "util.h"
 
 // module tests

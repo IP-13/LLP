@@ -2,6 +2,305 @@
 
 #include "launch_db.h"
 
+static char *open_db_string = "open db";
+static char *create_db_string = "create db";
+static char *close_db_string = "close db";
+static char *create_table_string = "create table";
+static char *delete_table_string = "delete table";
+static char *insert_string = "insert";
+static char *select_string = "select";
+static char *delete_string = "delete";
+static char *update_string = "update";
+static char *join_string = "join";
+static char *exit_string = "exit";
+
+static void print_available_commands() {
+    printf("%d: %s\n", OPEN_DB, open_db_string);
+    printf("%d: %s\n", CREATE_DB, create_db_string);
+    printf("%d: %s\n", CLOSE_DB, close_db_string);
+    printf("%d: %s\n", CREATE_TABLE, create_table_string);
+    printf("%d: %s\n", DELETE_TABLE, delete_table_string);
+    printf("%d: %s\n", INSERT, insert_string);
+    printf("%d: %s\n", SELECT, select_string);
+    printf("%d: %s\n", DELETE, delete_string);
+    printf("%d: %s\n", UPDATE, update_string);
+    printf("%d: %s\n", JOIN, join_string);
+    printf("%d: %s\n", EXIT, exit_string);
+}
+
+static struct update_value *scanf_update_value(const enum data_type *table_scheme) {
+    struct update_value *update_value = my_malloc(sizeof(struct update_value));
+    printf("Enter updated attribute num: ");
+    uint16_t attribute_num;
+    scanf("%"SCNu16"", &attribute_num);
+    update_value->attribute_num = attribute_num;
+
+    switch (table_scheme[attribute_num]) {
+        case BOOL: {
+            printf("Enter updated bool attribute value: ");
+            update_value->value = my_malloc(sizeof(int32_t));
+            scanf("%"SCNd32"", (int32_t *) update_value->value);
+            break;
+        }
+        case INT: {
+            printf("Enter updated int attribute value: ");
+            update_value->value = my_malloc(sizeof(int32_t));
+            scanf("%"SCNd32"", (int32_t *) update_value->value);
+            break;
+        }
+        case FLOAT: {
+            printf("Enter updated float attribute value: ");
+            update_value->value = my_malloc(sizeof(float));
+            scanf("%f", (float *) update_value->value);
+            break;
+        }
+        case STRING: {
+            printf("Enter updated string attribute value: ");
+            char s[100];
+            scanf("%s", s);
+            uint16_t size = strlen(s);
+            update_value->value = my_malloc(size * sizeof(char));
+            memcpy(update_value->value, s, size);
+            break;
+        }
+    }
+
+    return update_value;
+}
+
+static struct update_query *scanf_update_query(enum data_type *table_scheme) {
+    struct update_query *update_query = my_malloc(sizeof(struct update_query));
+    printf("Enter num of updated values: ");
+    uint16_t num_of_updates;
+    scanf("%"SCNu16"", &num_of_updates);
+
+    update_query->num_of_updates = num_of_updates;
+    update_query->update_values = my_malloc(num_of_updates * sizeof(struct update_value *));
+
+    for (size_t i = 0; i < num_of_updates; i++) {
+        update_query->update_values[i] = scanf_update_value(table_scheme);
+    }
+
+    return update_query;
+}
+
+static void free_update_value(struct update_value *update_value, const enum data_type *table_scheme) {
+    switch (table_scheme[update_value->attribute_num]) {
+        case BOOL: {
+            my_free(update_value->value, sizeof(int32_t));
+            break;
+        }
+        case INT: {
+            my_free(update_value->value, sizeof(int32_t));
+            break;
+        }
+        case FLOAT: {
+            my_free(update_value->value, sizeof(float));
+            break;
+        }
+        case STRING: {
+            uint16_t size = strlen(update_value->value);
+            my_free(update_value->value, size * sizeof(char));
+            break;
+        }
+    }
+
+    my_free(update_value, sizeof(struct update_value));
+}
+
+static void free_update_query(struct update_query *update_query, enum data_type *table_scheme) {
+    for (size_t i = 0; i < update_query->num_of_updates; i++) {
+        free_update_value(update_query->update_values[i], table_scheme);
+    }
+
+    my_free(update_query->update_values, update_query->num_of_updates * sizeof(struct update_value *));
+    my_free(update_query, sizeof(struct update_query));
+}
+
+static size_t str_len(const char *str) {
+    size_t size = 0;
+    while (str[size] != '\0') {
+        size++;
+    }
+
+    return size;
+}
+
+static char *scanf_table_name() {
+    printf("Enter table name (%d or less symbols): ", TABLE_NAME_SIZE);
+    char *table_name = my_malloc(TABLE_NAME_SIZE * sizeof(char));
+    scanf("%s", table_name);
+    return table_name;
+}
+
+static uint16_t scanf_num_of_filters() {
+    printf("Enter num of filters: ");
+    uint16_t num_of_filters;
+    scanf("%"SCNu16"", &num_of_filters);
+    return num_of_filters;
+}
+
+static void print_available_filters() {
+    printf("Available filter_type:\n");
+    printf("0.BOOL_EQ 1.BOOL_NEQ 2.INT_EQ 3.INT_NEQ 4.FLOAT_EQ 5.FLOAT_NEQ 6.STR_EQ 7.STR_NEQ 8.INT_GR 9.INT_LESS \n");
+    printf("10.INT_GR_EQ 11.INT_LESS_EQ 12.FLOAT_GR 13.FLOAT_LESS 14.FLOAT_GR_EQ 15.FLOAT_LESS_EQ 16.STR_LIKE\n");
+}
+
+static void *scanf_filter_value(enum filter_type filter_type) {
+    switch (filter_type) {
+        case BOOL_EQ:
+        case BOOL_NEQ: {
+            int32_t *value = my_malloc(sizeof(int32_t));
+            scanf("%"SCNd32"", value);
+            return value;
+        }
+        case INT_EQ:
+        case INT_NEQ:
+        case INT_GR:
+        case INT_LESS:
+        case INT_GR_EQ:
+        case INT_LESS_EQ: {
+            int32_t *value = my_malloc(sizeof(int32_t));
+            scanf("%"SCNd32"", value);
+            return value;
+        }
+        case FLOAT_EQ:
+        case FLOAT_NEQ:
+        case FLOAT_GR:
+        case FLOAT_LESS:
+        case FLOAT_GR_EQ:
+        case FLOAT_LESS_EQ: {
+            float *value = my_malloc(sizeof(float));
+            scanf("%f", value);
+            return value;
+        }
+        case STR_EQ:
+        case STR_NEQ:
+        case STR_LIKE: {
+            char *s = my_malloc(MAX_STR_SIZE * sizeof(char));
+            scanf("%s", s);
+            uint16_t size = str_len(s);
+            char *value = my_malloc(size * sizeof(char));
+            memcpy(value, s, size);
+            my_free(s, MAX_STR_SIZE * sizeof(char));
+            return value;
+        }
+    }
+
+    return NULL;
+}
+
+static struct filter **scanf_filters(uint32_t num_of_filters) {
+    struct filter **filters_list = (struct filter **) my_malloc(num_of_filters * sizeof(struct filter *));
+
+    for (size_t i = 0; i < num_of_filters; i++) {
+        print_available_filters();
+        printf("Enter filter_type num: ");
+        enum filter_type filter_type;
+        scanf("%d", &filter_type);
+        printf("Enter attribute number to which filter is applied: ");
+        uint16_t attribute_num;
+        scanf("%"SCNu16"", &attribute_num);
+        printf("Enter filter attribute value: ");
+        void *value = scanf_filter_value(filter_type);
+
+        struct filter *filter = my_malloc(sizeof(struct filter));
+
+        filter->attribute_num = attribute_num;
+        filter->filter_type = filter_type;
+        filter->value = value;
+
+        filters_list[i] = filter;
+    }
+
+    return filters_list;
+}
+
+static struct tuple *scanf_tuple(struct table *table) {
+    void **data = my_malloc(table->num_of_columns * sizeof(void *));
+
+    for (size_t i = 0; i < table->num_of_columns; i++) {
+        switch (table->table_scheme[i]) {
+            case BOOL: {
+                data[i] = my_malloc(sizeof(struct bool_field));
+                printf("Enter bool attribute %zu: ", i);
+                scanf("%"SCNd32"", &((struct bool_field *) data[i])->data);
+                break;
+            }
+            case INT: {
+                data[i] = my_malloc(sizeof(struct int_field));
+                printf("Enter int attribute %zu: ", i);
+                scanf("%"SCNd32"", &((struct int_field *) data[i])->data);
+                break;
+            }
+            case FLOAT: {
+                data[i] = my_malloc(sizeof(struct float_field));
+                printf("Enter float attribute %zu: ", i);
+                scanf("%f", &((struct float_field *) data[i])->data);
+                break;
+            }
+            case STRING: {
+                printf("Enter string attribute %zu (%d or less symbols): ", i, MAX_STR_SIZE);
+                char *s = my_malloc(MAX_STR_SIZE * sizeof(char));
+                scanf("%s", s);
+                uint16_t size = str_len(s);
+                data[i] = my_malloc(sizeof(struct string_field));
+                ((struct string_field *) data[i])->size = size;
+                ((struct string_field *) data[i])->data = my_malloc(size * sizeof(char));
+                memcpy(((struct string_field *) data[i])->data, s, size);
+                my_free(s, MAX_STR_SIZE);
+                break;
+            }
+        }
+    }
+
+    return create_tuple((page_offset) {.offset = 0}, data, table->num_of_columns, table->table_scheme);
+}
+
+static struct column_list *scanf_column_list(uint64_t num_of_columns) {
+    struct column_list *column_list = create_column_list();
+
+    for (size_t i = 0; i < num_of_columns; i++) {
+        printf("Enter column %zu data type: ", i);
+        enum data_type data_type;
+        scanf("%d", &data_type);
+
+        printf("Enter column %zu name (%d or less symbols): ", i, COLUMN_NAME_SIZE);
+        char *column_name = my_malloc(COLUMN_NAME_SIZE * sizeof(char));
+        scanf("%s", column_name);
+
+        uint64_t column_name_size = str_len(column_name);
+
+        char *new_column_name = my_malloc(column_name_size * sizeof(char));
+        memcpy(new_column_name, column_name, column_name_size);
+        my_free(column_name, COLUMN_NAME_SIZE * sizeof(char));
+
+        struct column *column = create_column(data_type, column_name_size, new_column_name);
+
+        column_list_push(column_list, column);
+    }
+
+    return column_list;
+}
+
+static struct table *scanf_table() {
+    printf("Enter table name (%d or less symbols): ", TABLE_NAME_SIZE);
+    char *table_name = my_malloc(TABLE_NAME_SIZE * sizeof(char));
+    scanf("%s", table_name);
+    uint64_t name_size = str_len(table_name);
+    char *new_table_name = my_malloc(name_size * sizeof(char));
+    memcpy(new_table_name, table_name, name_size);
+    my_free(table_name, TABLE_NAME_SIZE * sizeof(char));
+
+    printf("Enter num of columns: ");
+    uint64_t num_of_columns;
+    scanf("%"SCNu64"", &num_of_columns);
+
+    struct column_list *column_list = scanf_column_list(num_of_columns);
+
+    return create_table(name_size, new_table_name, num_of_columns, column_list);
+}
+
 
 void launch_db() {
     printf("Enter db name (%d or less symbols): ", DB_NAME_SIZE);
@@ -13,7 +312,7 @@ void launch_db() {
     enum command_type command = 0;
 
     while (command != EXIT) {
-        printf("Available:\n0. create table\n1. delete table\n2. insert\n3. select\n4. delete\n5. update_table\n6. join\n7. exit\n");
+        print_available_commands();
         printf("Enter command number: ");
         scanf("%d", &command);
 
