@@ -141,13 +141,21 @@ static uint16_t scanf_num_of_filters() {
 }
 
 static void print_available_filters() {
-    printf("Available filter_type:\n");
+    printf("Available filter_cond:\n");
     printf("0.BOOL_EQ 1.BOOL_NEQ 2.INT_EQ 3.INT_NEQ 4.FLOAT_EQ 5.FLOAT_NEQ 6.STR_EQ 7.STR_NEQ 8.INT_GR 9.INT_LESS \n");
     printf("10.INT_GR_EQ 11.INT_LESS_EQ 12.FLOAT_GR 13.FLOAT_LESS 14.FLOAT_GR_EQ 15.FLOAT_LESS_EQ 16.STR_LIKE\n");
 }
 
-static void *scanf_filter_value(enum filter_type filter_type) {
-    switch (filter_type) {
+static void *scanf_filter_value(enum filter_cond filter_cond, enum filter_type filter_type) {
+    if (filter_type == REFERENCE) {
+        char s[100];
+        scanf("%s", s);
+        char *value = my_malloc(strlen(s) * sizeof(char));
+        memcpy(value, s, strlen(s));
+        return value;
+    }
+
+    switch (filter_cond) {
         case BOOL_EQ:
         case BOOL_NEQ: {
             int32_t *value = my_malloc(sizeof(int32_t));
@@ -194,20 +202,29 @@ static struct filter **scanf_filters(uint32_t num_of_filters) {
     struct filter **filters_list = (struct filter **) my_malloc(num_of_filters * sizeof(struct filter *));
 
     for (size_t i = 0; i < num_of_filters; i++) {
-        print_available_filters();
-        printf("Enter filter_type num: ");
+        printf("Enter col name to which filter is applied: ");
+        char s[100];
+        scanf("%s", s);
+        char *col_name = my_malloc(strlen(s) * sizeof(char));
+        memcpy(col_name, s, strlen(s));
+
+        printf("Enter filter type (0 - CONST, 1 - REFERENCE): ");
         enum filter_type filter_type;
         scanf("%d", &filter_type);
-        printf("Enter attribute number to which filter is applied: ");
-        uint16_t attribute_num;
-        scanf("%"SCNu16"", &attribute_num);
+
+        print_available_filters();
+        printf("Enter filter_cond num: ");
+        enum filter_cond filter_cond;
+        scanf("%d", &filter_cond);
+
         printf("Enter filter attribute value: ");
-        void *value = scanf_filter_value(filter_type);
+        void *value = scanf_filter_value(filter_cond, filter_type);
 
         struct filter *filter = my_malloc(sizeof(struct filter));
 
-        filter->attribute_num = attribute_num;
+        filter->col_name = col_name;
         filter->filter_type = filter_type;
+        filter->filter_cond = filter_cond;
         filter->value = value;
 
         filters_list[i] = filter;
@@ -241,24 +258,28 @@ static struct tuple *scanf_tuple(struct table *table) {
             }
             case STRING: {
                 printf("Enter string attribute %zu (%d or less symbols): ", i, MAX_STR_SIZE);
-                char *s = my_malloc(MAX_STR_SIZE * sizeof(char));
+                char s[MAX_STR_SIZE];
                 scanf("%s", s);
+
+                struct string_field *string_field = my_malloc(sizeof(struct string_field));
                 uint16_t size = str_len(s);
-                data[i] = my_malloc(sizeof(struct string_field));
-                ((struct string_field *) data[i])->size = size;
-                ((struct string_field *) data[i])->data = my_malloc(size * sizeof(char));
-                memcpy(((struct string_field *) data[i])->data, s, size);
-                my_free(s, MAX_STR_SIZE);
+
+                string_field->size = size;
+                string_field->data = my_malloc(size * sizeof(char));
+                memcpy(string_field->data, s, size);
+
+                data[i] = string_field;
+
                 break;
             }
         }
     }
 
-    return create_tuple((page_offset) {.offset = 0}, data, table->num_of_columns, table->table_scheme);
+    return create_tuple(data, table->num_of_columns, table->table_scheme);
 }
 
-static struct column_list *scanf_column_list(uint64_t num_of_columns) {
-    struct column_list *column_list = create_column_list();
+static struct column **scanf_columns(uint64_t num_of_columns) {
+    struct column **columns = my_malloc(num_of_columns * sizeof(struct column *));
 
     for (size_t i = 0; i < num_of_columns; i++) {
         printf("Enter column %zu data type: ", i);
@@ -266,39 +287,100 @@ static struct column_list *scanf_column_list(uint64_t num_of_columns) {
         scanf("%d", &data_type);
 
         printf("Enter column %zu name (%d or less symbols): ", i, COLUMN_NAME_SIZE);
-        char *column_name = my_malloc(COLUMN_NAME_SIZE * sizeof(char));
+        char column_name[COLUMN_NAME_SIZE];
         scanf("%s", column_name);
 
         uint64_t column_name_size = str_len(column_name);
 
         char *new_column_name = my_malloc(column_name_size * sizeof(char));
         memcpy(new_column_name, column_name, column_name_size);
-        my_free(column_name, COLUMN_NAME_SIZE * sizeof(char));
 
         struct column *column = create_column(data_type, column_name_size, new_column_name);
 
-        column_list_push(column_list, column);
+        columns[i] = column;
     }
 
-    return column_list;
+    return columns;
 }
 
 static struct table *scanf_table() {
     printf("Enter table name (%d or less symbols): ", TABLE_NAME_SIZE);
-    char *table_name = my_malloc(TABLE_NAME_SIZE * sizeof(char));
+    char table_name[TABLE_NAME_SIZE];
     scanf("%s", table_name);
     uint64_t name_size = str_len(table_name);
     char *new_table_name = my_malloc(name_size * sizeof(char));
     memcpy(new_table_name, table_name, name_size);
-    my_free(table_name, TABLE_NAME_SIZE * sizeof(char));
 
     printf("Enter num of columns: ");
     uint64_t num_of_columns;
     scanf("%"SCNu64"", &num_of_columns);
 
-    struct column_list *column_list = scanf_column_list(num_of_columns);
+    struct column **columns = scanf_columns(num_of_columns);
 
-    return create_table(name_size, new_table_name, num_of_columns, column_list);
+    struct table *table = my_malloc(sizeof(struct table));
+    table->name_size = name_size;
+    table->name = new_table_name;
+    table->num_of_columns = num_of_columns;
+    table->columns = columns;
+
+    enum data_type *table_scheme = my_malloc(num_of_columns * sizeof(enum data_type));
+
+    for (size_t i = 0; i < num_of_columns; i++) {
+        table_scheme[i] = columns[i]->data_type;
+    }
+
+    table->table_scheme = table_scheme;
+
+    return table;
+}
+
+
+static struct join_values *scanf_join_value() {
+    struct join_values *join_values = my_malloc(sizeof(struct join_values));
+
+    printf("Enter num of join values: ");
+    uint16_t num_of_join_values;
+    scanf("%"SCNu16"", &num_of_join_values);
+
+    join_values->num_of_join_values = num_of_join_values;
+    join_values->table1_column_names = my_malloc(num_of_join_values * sizeof(char *));
+    join_values->table2_column_names = my_malloc(num_of_join_values * sizeof(char *));
+    join_values->filter_cond = my_malloc(num_of_join_values * sizeof(enum filter_cond));
+
+    for (size_t i = 0; i < num_of_join_values; i++) {
+        printf("Enter first table join column name %zu: ", i);
+        char table1_col_name[100];
+        scanf("%s", table1_col_name);
+        join_values->table1_column_names[i] = my_malloc(strlen(table1_col_name) * sizeof(char));
+        memcpy(join_values->table1_column_names[i], table1_col_name, strlen(table1_col_name));
+
+        printf("Enter second table join column name %zu: ", i);
+        char table2_col_name[100];
+        scanf("%s", table2_col_name);
+        join_values->table2_column_names[i] = my_malloc(strlen(table2_col_name) * sizeof(char));
+        memcpy(join_values->table2_column_names[i], table2_col_name, strlen(table2_col_name));
+
+        print_available_filters();
+        printf("Enter filter %zu condition ", i);
+        enum filter_cond filter_cond;
+        scanf("%d", &filter_cond);
+        join_values->filter_cond[i] = filter_cond;
+    }
+
+    return join_values;
+}
+
+
+static void free_join_values(struct join_values *join_values) {
+    for (size_t i = 0; i < join_values->num_of_join_values; i++) {
+        my_free(join_values->table2_column_names[i], strlen(join_values->table2_column_names[i]) * sizeof(char));
+        my_free(join_values->table1_column_names[i], strlen(join_values->table1_column_names[i]) * sizeof(char));
+    }
+
+    my_free(join_values->filter_cond, join_values->num_of_join_values * sizeof(enum filter_cond));
+    my_free(join_values->table2_column_names, join_values->num_of_join_values * sizeof(char *));
+    my_free(join_values->table1_column_names, join_values->num_of_join_values * sizeof(char *));
+    my_free(join_values, sizeof(struct join_values));
 }
 
 
@@ -334,15 +416,7 @@ void launch_db() {
             case INSERT: {
                 char *table_name = scanf_table_name();
 
-                struct table_list *list = table_list_get(db->table_list,
-                                                         get_table_index_by_name(db->table_list, table_name));
-
-                if (list == NULL) {
-                    my_free(table_name, TABLE_NAME_SIZE);
-                    break;
-                }
-
-                struct table *table = list->value;
+                struct table *table = get_table_by_name(table_name, db->num_of_tables, db->tables);
 
                 if (table == NULL) {
                     my_free(table_name, TABLE_NAME_SIZE);
@@ -361,7 +435,7 @@ void launch_db() {
 
                 select_from_table(db, table_name, num_of_filters, filters);
 
-                free_filters(filters, num_of_filters);
+                free_filters(num_of_filters, filters);
 
                 my_free(table_name, TABLE_NAME_SIZE);
 
@@ -374,37 +448,37 @@ void launch_db() {
 
                 delete_from_table(db, table_name, num_of_filters, filters);
 
-                free_filters(filters, num_of_filters);
+                free_filters(num_of_filters, filters);
 
                 my_free(table_name, TABLE_NAME_SIZE);
 
                 break;
             }
             case UPDATE: {
-                char *table_name = scanf_table_name();
-                uint16_t num_of_filters = scanf_num_of_filters();
-                struct filter **filters = scanf_filters(num_of_filters);
-
-                struct table_list *table_list = table_list_get(
-                        db->table_list, get_table_index_by_name(db->table_list, table_name));
-
-                if (table_list == NULL) {
-                    break;
-                }
-
-                struct table *table = table_list->value;
-
-                if (table == NULL) {
-                    break;
-                }
-
-                struct update_query *update_query = scanf_update_query(table->table_scheme);
-
-                update_table(db, table_name, num_of_filters, filters, update_query);
-
-                free_update_query(update_query, table->table_scheme);
-                free_filters(filters, num_of_filters);
-                my_free(table_name, TABLE_NAME_SIZE);
+//                char *table_name = scanf_table_name();
+//                uint16_t num_of_filters = scanf_num_of_filters();
+//                struct filter **filters = scanf_filters(num_of_filters);
+//
+//                struct table_list *table_list = table_list_get(
+//                        db->table_list, get_table_index_by_name(db->table_list, table_name));
+//
+//                if (table_list == NULL) {
+//                    break;
+//                }
+//
+//                struct table *table = table_list->value;
+//
+//                if (table == NULL) {
+//                    break;
+//                }
+//
+//                struct update_query *update_query = scanf_update_query(table->table_scheme);
+//
+//                update_table(db, table_name, num_of_filters, filters, update_query);
+//
+//                free_update_query(update_query, table->table_scheme);
+//                free_filters(filters, num_of_filters);
+//                my_free(table_name, TABLE_NAME_SIZE);
                 break;
             }
             case JOIN : {
@@ -417,10 +491,16 @@ void launch_db() {
                 uint16_t num_of_filters2 = scanf_num_of_filters();
                 struct filter **filters2 = scanf_filters(num_of_filters2);
 
-                join_table(db, table1_name, table2_name, num_of_filters1, filters1, num_of_filters2, filters2);
 
-                free_filters(filters2, num_of_filters2);
-                free_filters(filters1, num_of_filters1);
+                struct join_values *join_values = scanf_join_value();
+
+                join_table(db, table1_name, table2_name, num_of_filters1, filters1,
+                           num_of_filters2, filters2, join_values);
+
+                free_join_values(join_values);
+
+                free_filters(num_of_filters2, filters2);
+                free_filters(num_of_filters1, filters1);
 
                 my_free(table2_name, TABLE_NAME_SIZE);
                 my_free(table1_name, TABLE_NAME_SIZE);

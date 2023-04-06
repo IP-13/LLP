@@ -3,7 +3,6 @@
 #include <inttypes.h>
 #include <string.h>
 #include "tuple.h"
-#include "column_list.h"
 #include "table.h"
 #include "db.h"
 #include "structures.h"

@@ -6,23 +6,19 @@
 #include "structures.h"
 #include "my_malloc.h"
 #include "db.h"
-#include "column_list.h"
-#include "table_list.h"
 #include "table.h"
 #include "filters.h"
 #include "tuple.h"
 #include "util.h"
 
 // module tests
-void test_column_list();
-
-void test_table_list();
-
 void open_db_test();
 
 void tuple_test();
 
 void page_test();
+
+void insert_from_file(char *db_filename, char *table_name, char *data_file_name);
 
 // stress tests
 void insert_stress_test(int num_of_elements);

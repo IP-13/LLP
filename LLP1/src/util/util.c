@@ -3,8 +3,8 @@
 #include "util.h"
 
 
-void print_tuple(struct tuple *tuple, uint32_t num_of_attributes, const enum data_type *table_scheme) {
-    for (size_t i = 0; i < num_of_attributes; i++) {
+void print_tuple(struct tuple *tuple, uint32_t num_of_columns, const enum data_type *table_scheme) {
+    for (size_t i = 0; i < num_of_columns; i++) {
         switch (table_scheme[i]) {
             case BOOL: {
                 if (!((struct bool_field *) tuple->data[i])->data) {
@@ -33,8 +33,13 @@ void print_tuple(struct tuple *tuple, uint32_t num_of_attributes, const enum dat
     }
 }
 
-void free_filter_value(void *value, enum filter_type filter_type) {
-    switch (filter_type) {
+void free_filter_value(void *value, enum filter_cond filter_cond, enum filter_type filter_type) {
+    if (filter_type == CONST) {
+        my_free(value, strlen(value));
+        return;
+    }
+
+    switch (filter_cond) {
         case BOOL_EQ:
         case BOOL_NEQ:
             my_free(value, sizeof(int32_t));
@@ -65,9 +70,9 @@ void free_filter_value(void *value, enum filter_type filter_type) {
     }
 }
 
-void free_filters(struct filter **filters, uint16_t num_of_filters) {
+void free_filters(uint16_t num_of_filters, struct filter **filters) {
     for (size_t i = 0; i < num_of_filters; i++) {
-        free_filter_value(filters[i]->value, filters[i]->filter_type);
+        free_filter_value(filters[i]->value, filters[i]->filter_cond, filters[i]->filter_type);
         my_free(filters[i], sizeof(struct filter));
     }
 

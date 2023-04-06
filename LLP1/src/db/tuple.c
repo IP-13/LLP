@@ -3,13 +3,10 @@
 #include "tuple.h"
 
 
-struct tuple *read_tuple(uint64_t num_of_attributes, const enum data_type *table_scheme, FILE *file) {
-    page_offset start;
-    fread(&start, sizeof(page_offset), 1, file);
+struct tuple *read_tuple(uint64_t num_of_columns, const enum data_type *table_scheme, FILE *file) {
+    void **data = (void **) my_malloc(num_of_columns * sizeof(void *));
 
-    void **data = (void **) my_malloc(num_of_attributes * sizeof(void *));
-
-    for (size_t i = 0; i < num_of_attributes; i++) {
+    for (size_t i = 0; i < num_of_columns; i++) {
         switch (table_scheme[i]) {
             case BOOL: {
                 struct bool_field *bool_field = my_malloc(sizeof(struct bool_field));
@@ -42,16 +39,14 @@ struct tuple *read_tuple(uint64_t num_of_attributes, const enum data_type *table
         }
     }
 
-    struct tuple *tuple = create_tuple(start, data, num_of_attributes, table_scheme);
+    struct tuple *tuple = create_tuple(data, num_of_columns, table_scheme);
 
     return tuple;
 }
 
 
-int write_tuple(struct tuple *tuple, uint64_t num_of_attributes, const enum data_type *table_scheme, FILE *file) {
-    fwrite(&tuple->start.offset, sizeof(tuple->start.offset), 1, file);
-
-    for (size_t i = 0; i < num_of_attributes; i++) {
+int write_tuple(struct tuple *tuple, uint64_t num_of_columns, const enum data_type *table_scheme, FILE *file) {
+    for (size_t i = 0; i < num_of_columns; i++) {
         switch (table_scheme[i]) {
             case BOOL: {
                 struct bool_field *bool_field = tuple->data[i];
@@ -71,7 +66,7 @@ int write_tuple(struct tuple *tuple, uint64_t num_of_attributes, const enum data
             case STRING: {
                 struct string_field *string_field = tuple->data[i];
                 fwrite(&string_field->size, sizeof(uint16_t), 1, file);
-                fwrite(string_field->data, sizeof(char),string_field->size, file);
+                fwrite(string_field->data, sizeof(char), string_field->size, file);
                 break;
             }
             default:
@@ -83,18 +78,16 @@ int write_tuple(struct tuple *tuple, uint64_t num_of_attributes, const enum data
 }
 
 
-struct tuple *create_tuple(page_offset start, void **data,
-                           uint64_t num_of_attributes, const enum data_type *table_scheme) {
+struct tuple *create_tuple(void **data, uint64_t num_of_columns, const enum data_type *table_scheme) {
     struct tuple *tuple = my_malloc(sizeof(struct tuple));
-    tuple->start = start;
-    tuple->size = data_size(data, table_scheme, num_of_attributes) + sizeof(page_offset);
+    tuple->data_size = data_size(data, num_of_columns, table_scheme);
     tuple->data = data;
     return tuple;
 }
 
 
-void free_tuple(struct tuple *tuple, const enum data_type *table_scheme, uint64_t num_of_attributes) {
-    for (size_t i = 0; i < num_of_attributes; i++) {
+void free_tuple(struct tuple *tuple, uint64_t num_of_columns, const enum data_type *table_scheme) {
+    for (size_t i = 0; i < num_of_columns; i++) {
         switch (table_scheme[i]) {
             case BOOL:
                 my_free(tuple->data[i], sizeof(struct bool_field));
@@ -112,14 +105,14 @@ void free_tuple(struct tuple *tuple, const enum data_type *table_scheme, uint64_
         }
     }
 
-    my_free(tuple->data, num_of_attributes * sizeof(void *));
+    my_free(tuple->data, num_of_columns * sizeof(void *));
     my_free(tuple, sizeof(struct tuple));
 }
 
 
-uint16_t data_size(void **data, const enum data_type *table_scheme, uint64_t num_of_attributes) {
+uint16_t data_size(void **data, uint64_t num_of_columns, const enum data_type *table_scheme) {
     size_t data_size = 0;
-    for (size_t i = 0; i < num_of_attributes; i++) {
+    for (size_t i = 0; i < num_of_columns; i++) {
         switch (table_scheme[i]) {
             case BOOL:
                 data_size += sizeof(struct bool_field);

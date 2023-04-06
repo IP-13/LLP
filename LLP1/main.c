@@ -15,6 +15,13 @@ int main() {
 
     launch_db();
 
+
+//    char *db_file_name = "db1.txt";
+//    char *table_name = "my_table";
+//    char *data_file_name = "my_file.txt";
+//
+//    insert_from_file(db_file_name, table_name, data_file_name);
+
     return 0;
 }
 
