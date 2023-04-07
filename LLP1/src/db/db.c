@@ -397,7 +397,9 @@ void delete_from_table(struct db *db, char *table_name, uint16_t num_of_filters,
 
             free_page(table->last_page, table->num_of_columns, table->table_scheme);
 
+            table->last_page_offset = prev_page;
             table->last_page = read_page(prev_page, table->num_of_columns, table->table_scheme, db->file);
+
 
             relocate_tuples(table->last_page, curr_page);
         }
@@ -496,32 +498,134 @@ void join_table(struct db *db, char *table1_name, char *table2_name, uint16_t nu
 }
 
 
-//void update_table(struct db *db, char *table_name, uint16_t num_of_filters, struct filter **filters,
-//                  struct update_query *update_query) {
-//    struct table_list *table_list = table_list_get(db->table_list, get_table_index_by_name(db->table_list, table_name));
-//
-//    if (table_list == NULL) {
-//        return;
-//    }
-//
-//    struct table *table = table_list->value;
-//
-//    if (table == NULL) {
-//        return;
-//    }
-//
-//    struct page *curr_page = table->last_page;
-//
-//    while (curr_page != NULL) {
-//        page_update(db, table, curr_page, num_of_filters, filters, update_query);
-//        file_offset prev_page = curr_page->prev_page;
-//
-//        if (curr_page != table->last_page) {
-//            write_page(curr_page, table->num_of_columns, table->table_scheme, db->file);
-//            free_page(curr_page, table->table_scheme, table->num_of_columns);
-//        }
-//
-//        curr_page = read_page(db->file, prev_page, table->table_scheme, table->num_of_columns);
-//    }
-//}
-//
+static void update_tuple(struct tuple *tuple, struct update_query *update_query, struct table *table) {
+    for (size_t i = 0; i < update_query->num_of_updates; i++) {
+        uint16_t update_attr_num = update_query->update_values[i]->attribute_num;
+        void *new_value = update_query->update_values[i]->value;
+
+        switch (table->table_scheme[update_attr_num]) {
+            case BOOL: {
+                struct bool_field *bool_field = tuple->data[update_attr_num];
+                bool_field->data = *((int32_t *) new_value);
+                break;
+            }
+            case INT: {
+                struct int_field *int_field = tuple->data[update_attr_num];
+                int_field->data = *((int32_t *) new_value);
+                break;
+            }
+            case FLOAT: {
+                struct float_field *float_field = tuple->data[update_attr_num];
+                float_field->data = *((float *) new_value);
+                break;
+            }
+            case STRING: {
+                struct string_field *string_field = tuple->data[update_attr_num];
+                my_free(string_field->data, string_field->size * sizeof(char));
+                string_field->size = strlen((char *) new_value);
+                string_field->data = my_malloc(string_field->size * sizeof(char));
+                memcpy(string_field->data, new_value, string_field->size);
+                break;
+            }
+        }
+    }
+
+    tuple->data_size = data_size(tuple->data, table->num_of_columns, table->table_scheme);
+}
+
+
+void update_table(struct db *db, char *table_name, uint16_t num_of_filters, struct filter **filters,
+                  struct update_query *update_query) {
+    struct table *table = get_table_by_name(table_name, db->num_of_tables, db->tables);
+
+    if (table == NULL) {
+        return;
+    }
+
+    struct page *curr_page = table->last_page;
+
+    while (curr_page != NULL) {
+        for (size_t i = 0; i < curr_page->num_of_tuples; i++) {
+            int is_failed = 0;
+
+            for (size_t j = 0; j < num_of_filters; j++) {
+                if (!is_match(curr_page->tuples[i], filters[j], table->num_of_columns, table->columns)) {
+                    is_failed = 1;
+                    break;
+                }
+            }
+
+            if (is_failed) {
+                continue;
+            }
+
+            curr_page->total_free_space_size += data_size(curr_page->tuples[i]->data, table->num_of_columns,
+                                                          table->table_scheme);
+
+            struct tuple *new_tuple = curr_page->tuples[i];
+            curr_page->tuples[i] = curr_page->tuples[curr_page->num_of_tuples - 1];
+            curr_page->num_of_tuples--;
+            update_tuple(new_tuple, update_query, table);
+
+            int is_inserted = insert_to_page(curr_page, new_tuple);
+
+            if (!is_inserted) {
+                i--;
+
+                if (curr_page != table->last_page) {
+                    int is_inserted_last_page = insert_to_page(table->last_page, new_tuple);
+
+                    if (!is_inserted_last_page) {
+                        struct page *new_page = create_empty_page(db->last_page_offset, table->last_page->offset,
+                                                                  (file_offset) {.offset = NULL_PAGE});
+
+                        db->last_page_offset.offset += PAGE_SIZE;
+
+                        insert_to_page(new_page, new_tuple);
+
+                        table->last_page_offset = new_page->offset;
+                        table->last_page->next_page = new_page->offset;
+                        write_page(table->last_page, table->num_of_columns, table->table_scheme, db->file);
+                        free_page(table->last_page, table->num_of_columns, table->table_scheme);
+                        table->last_page = new_page;
+                    }
+                }
+            } else {
+                struct tuple *temp = curr_page->tuples[i];
+                curr_page->tuples[i] = curr_page->tuples[curr_page->num_of_tuples - 1];
+                curr_page->tuples[curr_page->num_of_tuples - 1] = temp;
+            }
+        }
+
+        int is_curr_page_full = relocate_tuples(table->last_page, curr_page);
+
+        if (!is_curr_page_full) {
+            file_offset prev_page = table->last_page->prev_page;
+            rewrite_page(db->last_page_offset, table->last_page->offset, db->file);
+            check_if_last_page(db->last_page_offset, table->last_page_offset, db);
+            free_page(table->last_page, table->num_of_columns, table->table_scheme);
+
+            table->last_page_offset = prev_page;
+
+            if (prev_page.offset != curr_page->offset.offset) {
+                table->last_page = read_page(prev_page, table->num_of_columns, table->table_scheme, db->file);
+            } else {
+                table->last_page = curr_page;
+            }
+
+            table->last_page->next_page = (file_offset) {.offset = NULL_PAGE};
+
+            relocate_tuples(table->last_page, curr_page);
+        }
+
+        file_offset prev_page = curr_page->prev_page;
+        write_page(curr_page, table->num_of_columns, table->table_scheme, db->file);
+        if (curr_page != table->last_page) {
+            free_page(curr_page, table->num_of_columns, table->table_scheme);
+        }
+        curr_page = read_page(prev_page, table->num_of_columns, table->table_scheme, db->file);
+    }
+
+
+}
+

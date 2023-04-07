@@ -4,7 +4,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include "structures.h"
 #include "my_malloc.h"
 #include "data_type.h"
 #include "tuple.h"

@@ -5,7 +5,7 @@
 
 
 int main() {
-//    insert_stress_test(30);
+//    insert_stress_test(1000);
 
 //    select_stress_test(1000, 1000);
 

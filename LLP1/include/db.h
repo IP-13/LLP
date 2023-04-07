@@ -11,7 +11,6 @@
 #include "my_malloc.h"
 #include "offsets.h"
 #include "filters.h"
-#include "structures.h"
 #include "tuple.h"
 
 #define TABLES_INITIAL_CAPACITY 10
@@ -32,6 +31,18 @@ struct join_values {
     char **table1_column_names;
     char **table2_column_names;
     enum filter_cond *filter_cond;
+};
+
+
+struct update_value {
+    uint16_t attribute_num;
+    void *value;
+};
+
+
+struct update_query {
+    uint16_t num_of_updates;
+    struct update_value **update_values;
 };
 
 

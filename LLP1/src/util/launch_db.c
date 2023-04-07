@@ -455,30 +455,23 @@ void launch_db() {
                 break;
             }
             case UPDATE: {
-//                char *table_name = scanf_table_name();
-//                uint16_t num_of_filters = scanf_num_of_filters();
-//                struct filter **filters = scanf_filters(num_of_filters);
-//
-//                struct table_list *table_list = table_list_get(
-//                        db->table_list, get_table_index_by_name(db->table_list, table_name));
-//
-//                if (table_list == NULL) {
-//                    break;
-//                }
-//
-//                struct table *table = table_list->value;
-//
-//                if (table == NULL) {
-//                    break;
-//                }
-//
-//                struct update_query *update_query = scanf_update_query(table->table_scheme);
-//
-//                update_table(db, table_name, num_of_filters, filters, update_query);
-//
-//                free_update_query(update_query, table->table_scheme);
-//                free_filters(filters, num_of_filters);
-//                my_free(table_name, TABLE_NAME_SIZE);
+                char *table_name = scanf_table_name();
+                uint16_t num_of_filters = scanf_num_of_filters();
+                struct filter **filters = scanf_filters(num_of_filters);
+
+                struct table *table = get_table_by_name(table_name, db->num_of_tables, db->tables);
+
+                if (table == NULL) {
+                    break;
+                }
+
+                struct update_query *update_query = scanf_update_query(table->table_scheme);
+
+                update_table(db, table_name, num_of_filters, filters, update_query);
+
+                free_update_query(update_query, table->table_scheme);
+                free_filters(num_of_filters, filters);
+                my_free(table_name, TABLE_NAME_SIZE);
                 break;
             }
             case JOIN : {

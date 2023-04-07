@@ -3,7 +3,6 @@
 #include <bits/types/FILE.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include "structures.h"
 #include "my_malloc.h"
 #include "filters.h"
 #include "tuple.h"

@@ -3,7 +3,6 @@
 #include <time.h>
 #include <stdlib.h>
 #include <string.h>
-#include "structures.h"
 #include "my_malloc.h"
 #include "db.h"
 #include "table.h"

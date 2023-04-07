@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <string.h>
 #include "my_malloc.h"
-#include "structures.h"
 #include "page.h"
 #include "column.h"
 
